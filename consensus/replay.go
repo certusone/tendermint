@@ -47,6 +47,7 @@ func (cs *ConsensusState) readReplayMessage(msg *TimedWALMessage, newStepCh chan
 		return nil
 	}
 
+	cs.Logger.Debug("Next message time: " + msg.Time.String())
 	// for logging
 	switch m := msg.Msg.(type) {
 	case types.EventDataRoundState:
@@ -58,6 +59,7 @@ func (cs *ConsensusState) readReplayMessage(msg *TimedWALMessage, newStepCh chan
 			case mi := <-newStepCh:
 				m2 := mi.(types.EventDataRoundState)
 				if m.Height != m2.Height || m.Round != m2.Round || m.Step != m2.Step {
+					//TODO comment next line to continue -> H38
 					return fmt.Errorf("RoundState mismatch. Got %v; Expected %v", m2, m)
 				}
 			case <-ticker:

@@ -4,12 +4,11 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/pkg/errors"
 
 	bc "github.com/tendermint/tendermint/blockchain"
 	cfg "github.com/tendermint/tendermint/config"
@@ -45,7 +44,7 @@ func (cs *ConsensusState) ReplayFile(file string, console bool) error {
 		return errors.New("cs is already running, cannot replay")
 	}
 	if cs.wal != nil {
-		return errors.New("cs wal is open, cannot replay")
+		//return errors.New("cs wal is open, cannot replay")
 	}
 
 	cs.startForReplay()
@@ -78,7 +77,19 @@ func (cs *ConsensusState) ReplayFile(file string, console bool) error {
 	}
 
 	pb := newPlayback(file, fp, cs, cs.state.Copy())
+	pb.cs.Logger = log.NewTMLogger(os.Stdout)
 	defer pb.fp.Close() // nolint: errcheck
+
+	go func() {
+		for {
+			<-cs.timeoutTicker.Chan()
+		}
+	}()
+	go func() {
+		for {
+			<-cs.statsMsgQueue
+		}
+	}()
 
 	var nextN int // apply N msgs in a row
 	var msg *TimedWALMessage
@@ -340,7 +351,7 @@ func newConsensusStateForReplay(config cfg.BaseConfig, csConfig *cfg.ConsensusCo
 	mempool, evpool := sm.MockMempool{}, sm.MockEvidencePool{}
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
 
-	consensusState := NewConsensusState(csConfig, state.Copy(), blockExec,
+	consensusState := NewConsensusState(csConfig, sm.LoadState(stateDB).Copy(), blockExec,
 		blockStore, mempool, evpool)
 
 	consensusState.SetEventBus(eventBus)
